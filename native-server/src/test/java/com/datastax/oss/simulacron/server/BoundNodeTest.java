@@ -21,6 +21,7 @@ import com.datastax.oss.protocol.internal.Frame;
 import com.datastax.oss.protocol.internal.FrameCodec;
 import com.datastax.oss.protocol.internal.Message;
 import com.datastax.oss.protocol.internal.ProtocolConstants;
+import com.datastax.oss.protocol.internal.ProtocolFeatures;
 import com.datastax.oss.protocol.internal.ProtocolV5ServerCodecs;
 import com.datastax.oss.protocol.internal.request.Execute;
 import com.datastax.oss.protocol.internal.request.Options;
@@ -45,6 +46,7 @@ import com.datastax.oss.simulacron.common.stubbing.Action;
 import com.datastax.oss.simulacron.common.stubbing.MessageResponseAction;
 import com.datastax.oss.simulacron.common.stubbing.StubMapping;
 import com.datastax.oss.simulacron.common.utils.FrameUtils;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.util.HashedWheelTimer;
@@ -143,7 +145,7 @@ public class BoundNodeTest {
     assertThat(frame.message).isSameAs(Void.INSTANCE);
   }
 
-  private QueryOptions options =
+  private final QueryOptions options =
       new QueryOptions(
           1,
           Collections.emptyList(),
@@ -204,7 +206,8 @@ public class BoundNodeTest {
   public void shouldPrepareAndCreateInternalPrimeWithProtocolV5() {
     Set<Integer> supportedVersions = new TreeSet<>();
     supportedVersions.add(5);
-    FrameCodec codec = new FrameCodecWrapper(supportedVersions, new ProtocolV5ServerCodecs());
+    FrameCodec<ByteBuf> codec =
+        new FrameCodecWrapper(supportedVersions, new ProtocolV5ServerCodecs());
 
     String query = "select * from unprimed";
     Prepare prepare = new Prepare(query);
@@ -227,7 +230,7 @@ public class BoundNodeTest {
 
     Prepared prepared = (Prepared) frame.message;
 
-    assertThat(codec.encode(frame)).isNotNull();
+    assertThat(codec.encode(frame, ProtocolFeatures.EMPTY)).isNotNull();
 
     // Execute should succeed since bound node creates an internal prime.
     Execute execute = new Execute(prepared.preparedQueryId, options);
@@ -259,7 +262,7 @@ public class BoundNodeTest {
       loggedNode.clearLogs();
     }
 
-    assertThat(codec.encode(frame)).isNotNull();
+    assertThat(codec.encode(frame, ProtocolFeatures.EMPTY)).isNotNull();
   }
 
   @Test

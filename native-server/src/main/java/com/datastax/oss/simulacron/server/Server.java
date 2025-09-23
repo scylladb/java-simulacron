@@ -17,6 +17,7 @@ package com.datastax.oss.simulacron.server;
 
 import static com.datastax.oss.simulacron.server.CompletableFutures.getUninterruptibly;
 
+import com.datastax.oss.protocol.internal.ProtocolFeatures;
 import com.datastax.oss.simulacron.common.cluster.ClusterSpec;
 import com.datastax.oss.simulacron.common.cluster.DataCenterSpec;
 import com.datastax.oss.simulacron.common.cluster.NodeSpec;
@@ -178,7 +179,6 @@ public final class Server implements AutoCloseable {
    *
    * @param cluster Cluster to wrap in a bound cluster.
    */
-  @SuppressWarnings("unchecked")
   private BoundCluster boundCluster(ClusterSpec cluster) {
     long clusterId = cluster.getId() == null ? clusterCounter.getAndIncrement() : cluster.getId();
     return new BoundCluster(cluster, clusterId, this);
@@ -223,7 +223,6 @@ public final class Server implements AutoCloseable {
    * @return A future that when it completes provides a {@link BoundCluster} with ids and addresses
    *     assigned. Note that the return value is not the same object as the input.
    */
-  @SuppressWarnings("unchecked")
   public CompletionStage<BoundCluster> registerAsync(
       ClusterSpec cluster, ServerOptions serverOptions) {
     if (isClosed()) {
@@ -612,17 +611,15 @@ public final class Server implements AutoCloseable {
                           Future<?> future =
                               eventLoopGroup.shutdownGracefully(0, 1, TimeUnit.SECONDS);
                           // adapt future to completable future by calling get on common pool.
-                          CompletableFuture<Void> f =
-                              CompletableFuture.supplyAsync(
-                                  () -> {
-                                    try {
-                                      future.get();
-                                      return null;
-                                    } catch (InterruptedException | ExecutionException e) {
-                                      throw new RuntimeException(e);
-                                    }
-                                  });
-                          return f;
+                          return CompletableFuture.supplyAsync(
+                              () -> {
+                                try {
+                                  future.get();
+                                  return null;
+                                } catch (InterruptedException | ExecutionException e) {
+                                  throw new RuntimeException(e);
+                                }
+                              });
                         } else {
                           CompletableFuture<Void> future = new CompletableFuture<>();
                           future.complete(null);
@@ -646,7 +643,7 @@ public final class Server implements AutoCloseable {
   public static class Builder {
     private AddressResolver addressResolver = AddressResolver.defaultResolver;
 
-    private static long DEFAULT_BIND_TIMEOUT_IN_NANOS =
+    private static final long DEFAULT_BIND_TIMEOUT_IN_NANOS =
         TimeUnit.NANOSECONDS.convert(10, TimeUnit.SECONDS);
 
     private long bindTimeoutInNanos = DEFAULT_BIND_TIMEOUT_IN_NANOS;
@@ -663,7 +660,7 @@ public final class Server implements AutoCloseable {
 
     private Class<? extends ServerChannel> channelClass;
 
-    private List<StubMapping> stubMappings = new ArrayList<>();
+    private final List<StubMapping> stubMappings = new ArrayList<>();
 
     Builder() {}
 
@@ -853,7 +850,7 @@ public final class Server implements AutoCloseable {
   static class Initializer extends ChannelInitializer<Channel> {
 
     @Override
-    protected void initChannel(Channel channel) throws Exception {
+    protected void initChannel(Channel channel) {
       ChannelPipeline pipeline = channel.pipeline();
       BoundNode node = channel.parent().attr(HANDLER).get();
       node.clientChannelGroup.add(channel);
@@ -864,8 +861,8 @@ public final class Server implements AutoCloseable {
 
         pipeline
             .addLast(new FlushConsolidationHandler())
-            .addLast("decoder", new FrameDecoder(node.getFrameCodec()))
-            .addLast("encoder", new FrameEncoder(node.getFrameCodec()))
+            .addLast("decoder", new FrameDecoder(node.getFrameCodec(), ProtocolFeatures.EMPTY))
+            .addLast("encoder", new FrameEncoder(node.getFrameCodec(), ProtocolFeatures.EMPTY))
             .addLast("requestHandler", new RequestHandler(node));
       } finally {
         MDC.remove("node");
