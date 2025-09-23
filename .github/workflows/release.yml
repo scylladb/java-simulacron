@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        type: boolean
+        description: 'dry-run: run without pushing SCM changes to upstream'
+        default: false
+
+      skip-tests:
+        type: boolean
+        description: 'skip-tests: do not run tests while releasing'
+        default: false
+
+      target-tag:
+        type: string
+        description: 'target-tag: tag or branch name to release. Use to to re-release failed releases'
+        default: master
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    env:
+      MVNCMD: mvn -B -X -ntp
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Checkout Code One Commit Before ${{ inputs.target-tag }}
+        if: inputs.target-tag != 'master'
+        run: |
+          if [[ "${{ inputs.target-tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            git fetch --prune --unshallow || true
+            git checkout ${{ inputs.target-tag }}~1
+            git tag -d ${{ inputs.target-tag }}
+          else
+            echo "Skipping: ${{ inputs.target-tag }} is not a semver tag"
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          server-id: central
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          server-username: SONATYPE_TOKEN_USERNAME
+          server-password: SONATYPE_TOKEN_PASSWORD
+          cache: maven
+
+      - name: Configure Git user
+        run: |
+          git config user.name "ScyllaDB Promoter"
+          git config user.email "github-promoter@scylladb.com"
+
+      - name: Clean project
+        run: $MVNCMD clean
+
+      - name: Clean release
+        run: $MVNCMD release:clean
+
+      - name: Prepare release
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          make release-prepare
+
+      - name: Set SKIP_TESTS environment variable
+        if: inputs.skip-tests == true
+        run: |
+          echo "SKIP_TESTS=true" >> "$GITHUB_ENV"
+
+      - name: Perform release
+        if: inputs.dry-run == false
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          SONATYPE_TOKEN_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
+          SONATYPE_TOKEN_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
+        run: |
+          make release
+
+      - name: Perform dry release
+        if: inputs.dry-run == true
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          SONATYPE_TOKEN_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
+          SONATYPE_TOKEN_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
+        run: |
+          make release-dry-run
+
+      - name: Upload stdout.log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-stdout
+          path: /tmp/logs-stdout.log
+
+      - name: Upload stderr.log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-stderr
+          path: /tmp/logs-stderr.log
+
+      - name: Push changes to SCM
+        if: inputs.dry-run == false && inputs.target-tag == 'master'
+        run: |
+          git status && git log -3
+          git push origin --follow-tags -v
