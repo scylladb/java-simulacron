@@ -18,11 +18,13 @@ package com.datastax.oss.simulacron.server;
 import com.datastax.oss.protocol.internal.Frame;
 import com.datastax.oss.protocol.internal.Message;
 import com.datastax.oss.protocol.internal.ProtocolConstants;
+import com.datastax.oss.protocol.internal.ProtocolFeatures;
 import com.datastax.oss.protocol.internal.response.Error;
 import com.datastax.oss.simulacron.common.utils.FrameUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ import org.slf4j.LoggerFactory;
 public class FrameDecoder extends LengthFieldBasedFrameDecoder {
   private static final Logger logger = LoggerFactory.getLogger(FrameDecoder.class);
   private final FrameCodecWrapper frameCodec;
+  private final ProtocolFeatures protocolFeatures;
 
   private static final int MAX_FRAME_LENGTH = 256 * 1024 * 1024; // 256 MB
   private static final int HEADER_LENGTH =
@@ -38,10 +41,11 @@ public class FrameDecoder extends LengthFieldBasedFrameDecoder {
 
   private boolean isFirstResponse = true;
 
-  FrameDecoder(FrameCodecWrapper frameCodec) {
+  FrameDecoder(FrameCodecWrapper frameCodec, ProtocolFeatures protocolFeatures) {
     super(MAX_FRAME_LENGTH, HEADER_LENGTH, LENGTH_FIELD_LENGTH, 0, 0, true);
 
     this.frameCodec = frameCodec;
+    this.protocolFeatures = protocolFeatures;
   }
 
   @Override
@@ -77,7 +81,7 @@ public class FrameDecoder extends LengthFieldBasedFrameDecoder {
         buf.writeInt(6 + message.length()); // frame length
         buf.writeInt(0xA); // protocol error;
         buf.writeShort(message.length());
-        buf.writeBytes(message.getBytes("UTF-8"));
+        buf.writeBytes(message.getBytes(StandardCharsets.UTF_8));
         ctx.writeAndFlush(buf);
         return new UnsupportedProtocolVersionMessage(protocolVersion, streamId);
       }
@@ -113,13 +117,13 @@ public class FrameDecoder extends LengthFieldBasedFrameDecoder {
               FrameUtils.emptyCustomPayload,
               Collections.emptyList(),
               message);
-      ctx.writeAndFlush(frameCodec.encode(frame));
+      ctx.writeAndFlush(frameCodec.encode(frame, protocolFeatures));
       int length = contents.getInt(contents.readerIndex() + 5);
       // discard the frame.
       contents.skipBytes(9 + length);
       return new UnsupportedProtocolVersionMessage(protocolVersion, streamId);
     }
-    return frameCodec.decode(contents);
+    return frameCodec.decode(contents, protocolFeatures);
   }
 
   @Override

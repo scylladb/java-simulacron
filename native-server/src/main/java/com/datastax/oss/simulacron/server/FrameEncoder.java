@@ -18,6 +18,7 @@ package com.datastax.oss.simulacron.server;
 import com.datastax.oss.protocol.internal.Frame;
 import com.datastax.oss.protocol.internal.FrameCodec;
 import com.datastax.oss.protocol.internal.ProtocolConstants;
+import com.datastax.oss.protocol.internal.ProtocolFeatures;
 import com.datastax.oss.protocol.internal.response.Error;
 import com.datastax.oss.simulacron.common.utils.FrameUtils;
 import io.netty.buffer.ByteBuf;
@@ -29,24 +30,27 @@ import org.slf4j.LoggerFactory;
 
 public class FrameEncoder extends MessageToMessageEncoder<Frame> {
 
-  private static Logger logger = LoggerFactory.getLogger(FrameEncoder.class);
+  private static final Logger logger = LoggerFactory.getLogger(FrameEncoder.class);
 
   private final FrameCodec<ByteBuf> frameCodec;
+  private final ProtocolFeatures protocolFeatures;
 
-  FrameEncoder(FrameCodec<ByteBuf> frameCodec) {
+  FrameEncoder(FrameCodec<ByteBuf> frameCodec, ProtocolFeatures protocolFeatures) {
     this.frameCodec = frameCodec;
+    this.protocolFeatures = protocolFeatures;
   }
 
   @Override
   protected void encode(ChannelHandlerContext ctx, Frame msg, List<Object> out) {
     try {
-      out.add(frameCodec.encode(msg));
+      out.add(frameCodec.encode(msg, protocolFeatures));
     } catch (Throwable t) {
       logger.error("Exception while encoding a frame. Returning a server error instead.", t);
       out.add(
           frameCodec.encode(
               FrameUtils.convertResponseMessage(
-                  msg, new Error(ProtocolConstants.ErrorCode.SERVER_ERROR, t.toString()))));
+                  msg, new Error(ProtocolConstants.ErrorCode.SERVER_ERROR, t.toString())),
+              protocolFeatures));
     }
   }
 }
