@@ -21,6 +21,7 @@ import com.datastax.oss.protocol.internal.Compressor;
 import com.datastax.oss.protocol.internal.Frame;
 import com.datastax.oss.protocol.internal.FrameCodec;
 import com.datastax.oss.protocol.internal.Message;
+import com.datastax.oss.protocol.internal.ProtocolFeatures;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -31,7 +32,6 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.local.LocalChannel;
 import java.io.Closeable;
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -54,15 +54,14 @@ public class MockClient implements Closeable {
         .handler(
             new ChannelInitializer<LocalChannel>() {
               @Override
-              protected void initChannel(LocalChannel ch) throws Exception {
+              protected void initChannel(LocalChannel ch) {
                 ch.pipeline()
-                    .addLast(new FrameEncoder(frameCodec))
+                    .addLast(new FrameEncoder(frameCodec, ProtocolFeatures.EMPTY))
                     .addLast(new TestFrameDecoder(frameCodec))
                     .addLast(
                         new ChannelInboundHandlerAdapter() {
                           @Override
-                          public void channelRead(ChannelHandlerContext ctx, Object msg)
-                              throws Exception {
+                          public void channelRead(ChannelHandlerContext ctx, Object msg) {
                             responses.offer((Frame) msg);
                           }
                         });
@@ -96,7 +95,7 @@ public class MockClient implements Closeable {
   }
 
   @Override
-  public void close() throws IOException {
+  public void close() {
     try {
       if (this.channel != null) {
         this.channel.close().sync();

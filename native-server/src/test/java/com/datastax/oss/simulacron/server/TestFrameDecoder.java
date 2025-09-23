@@ -17,6 +17,7 @@ package com.datastax.oss.simulacron.server;
 
 import com.datastax.oss.protocol.internal.Frame;
 import com.datastax.oss.protocol.internal.FrameCodec;
+import com.datastax.oss.protocol.internal.ProtocolFeatures;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
@@ -40,7 +41,7 @@ public class TestFrameDecoder extends LengthFieldBasedFrameDecoder {
     if (buffer.readableBytes() < HEADER_LENGTH) return null;
     ByteBuf contents = (ByteBuf) super.decode(ctx, buffer);
     if (contents == null) return null;
-    return frameCodec.decode(contents);
+    return frameCodec.decode(contents, ProtocolFeatures.EMPTY);
   }
 
   @Override
