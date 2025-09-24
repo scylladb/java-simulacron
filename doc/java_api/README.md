@@ -10,7 +10,7 @@ Simulacron can be added to your application by using the following maven depende
 
 ```xml
 <dependency>
-  <groupId>com.datastax.oss.simulacron</groupId>
+  <groupId>com.scylladb.oss.simulacron</groupId>
   <artifactId>simulacron-native-server</artifactId>
   <version>0.8.9</version>
 </dependency>
@@ -22,7 +22,7 @@ using the java driver you should consider depending on the `driver-3x` module wh
 
 ```xml
 <dependency>
-  <groupId>com.datastax.oss.simulacron</groupId>
+  <groupId>com.scylladb.oss.simulacron</groupId>
   <artifactId>simulacron-driver-3x</artifactId>
   <version>0.8.9</version>
 </dependency>
