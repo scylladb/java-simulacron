@@ -20,7 +20,7 @@
   <parent>
     <groupId>com.scylladb.oss.simulacron</groupId>
     <artifactId>simulacron-parent</artifactId>
-    <version>0.13.0.0-SNAPSHOT</version>
+    <version>0.13.0.0</version>
   </parent>
 
   <artifactId>simulacron-http-server</artifactId>
