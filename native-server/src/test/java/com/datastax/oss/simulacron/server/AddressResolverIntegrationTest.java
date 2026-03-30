@@ -91,9 +91,7 @@ public class AddressResolverIntegrationTest {
       BoundCluster boundCluster0 = multiNodeServer.register(cluster0);
 
       List<SocketAddress> cluster0Addrs =
-          boundCluster0.getNodes().stream()
-              .map(BoundNode::getAddress)
-              .collect(Collectors.toList());
+          boundCluster0.getNodes().stream().map(BoundNode::getAddress).collect(Collectors.toList());
 
       multiNodeServer.unregister(boundCluster0.getId());
 
@@ -101,9 +99,7 @@ public class AddressResolverIntegrationTest {
       BoundCluster boundCluster1 = multiNodeServer.register(cluster1);
 
       List<SocketAddress> cluster1Addrs =
-          boundCluster1.getNodes().stream()
-              .map(BoundNode::getAddress)
-              .collect(Collectors.toList());
+          boundCluster1.getNodes().stream().map(BoundNode::getAddress).collect(Collectors.toList());
 
       assertThat(cluster1Addrs).hasSameElementsAs(cluster0Addrs);
     }
