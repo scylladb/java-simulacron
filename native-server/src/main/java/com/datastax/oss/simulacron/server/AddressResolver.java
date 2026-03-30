@@ -31,12 +31,6 @@ public interface AddressResolver extends Supplier<SocketAddress> {
   // different IP range or run multiple instances.
   AddressResolver defaultResolver = new Inet4Resolver();
 
-  /**
-   * A resolver that attempts to use every port (after 49152) on an ip before advancing to the next
-   * ip.
-   */
-  AddressResolver nodePerPortResolver = new NodePerPortResolver();
-
   AddressResolver localAddressResolver = () -> new LocalAddress(UUID.randomUUID().toString());
 
   /**

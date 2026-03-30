@@ -745,8 +745,8 @@ public final class Server implements AutoCloseable {
 
     /**
      * Whether to support multiple nodes per IP (as per CASSANDRA-7544). Using this with true
-     * overrides {@link #withAddressResolver(AddressResolver)}, using {@link
-     * AddressResolver#nodePerPortResolver}.
+     * overrides {@link #withAddressResolver(AddressResolver)}, allocating a fresh {@link
+     * NodePerPortResolver} for this server instance.
      *
      * @param enabled Whether or not a node can be assigned to each port.
      * @return This builder.
@@ -754,7 +754,7 @@ public final class Server implements AutoCloseable {
     public Builder withMultipleNodesPerIp(boolean enabled) {
       this.multipleNodesPerIp = enabled;
       if (enabled) {
-        this.addressResolver = AddressResolver.nodePerPortResolver;
+        this.addressResolver = new NodePerPortResolver();
       }
       return this;
     }
