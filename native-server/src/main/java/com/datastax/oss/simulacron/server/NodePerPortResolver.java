@@ -92,4 +92,9 @@ public class NodePerPortResolver implements AddressResolver {
       }
     }
   }
+
+  @Override
+  public void release(SocketAddress address) {
+    releasedAddresses.offer((InetSocketAddress) address);
+  }
 }

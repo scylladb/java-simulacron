@@ -53,4 +53,15 @@ public class NodePerPortResolverTest {
       }
     }
   }
+
+  @Test
+  public void testAddressReleased() {
+    // Validates that release() correctly recycles an address back into the resolver,
+    // so a subsequent get() returns the same address rather than a new one.
+    AddressResolver resolver = new NodePerPortResolver(1000);
+    InetSocketAddress first = (InetSocketAddress) resolver.get(); // 127.0.0.1:1000
+    resolver.release(first);
+    InetSocketAddress reused = (InetSocketAddress) resolver.get(); // should be 127.0.0.1:1000
+    assertThat(reused).isEqualTo(first);
+  }
 }

@@ -80,4 +80,32 @@ public class AddressResolverIntegrationTest {
       lastAddresses = clusterAddrs;
     }
   }
+
+  @Test
+  public void testAddressesReusedWithMultipleNodesPerIp() throws Exception {
+    // Validates that NodePerPortResolver correctly recycles addresses via release() when
+    // withMultipleNodesPerIp(true) is used. This would fail before the fix because
+    // release() was a no-op, causing addresses to never be recycled.
+    try (Server multiNodeServer = Server.builder().withMultipleNodesPerIp(true).build()) {
+      ClusterSpec cluster0 = ClusterSpec.builder().withNodes(3, 3, 3).build();
+      BoundCluster boundCluster0 = multiNodeServer.register(cluster0);
+
+      List<SocketAddress> cluster0Addrs =
+          boundCluster0.getNodes().stream()
+              .map(BoundNode::getAddress)
+              .collect(Collectors.toList());
+
+      multiNodeServer.unregister(boundCluster0.getId());
+
+      ClusterSpec cluster1 = ClusterSpec.builder().withNodes(4, 4, 1).build();
+      BoundCluster boundCluster1 = multiNodeServer.register(cluster1);
+
+      List<SocketAddress> cluster1Addrs =
+          boundCluster1.getNodes().stream()
+              .map(BoundNode::getAddress)
+              .collect(Collectors.toList());
+
+      assertThat(cluster1Addrs).hasSameElementsAs(cluster0Addrs);
+    }
+  }
 }
