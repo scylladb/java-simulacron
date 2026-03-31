@@ -15,7 +15,7 @@ on:
 
       target-tag:
         type: string
-        description: 'target-tag: tag or branch name to release. Use to to re-release failed releases'
+        description: 'target-tag: tag or branch name to release. Use to re-release failed releases'
         default: master
 
 jobs:

@@ -744,18 +744,17 @@ public final class Server implements AutoCloseable {
     }
 
     /**
-     * Whether to support multiple nodes per IP (as per CASSANDRA-7544). Using this with true
-     * overrides {@link #withAddressResolver(AddressResolver)}, using {@link
-     * AddressResolver#nodePerPortResolver}.
+     * Whether to support multiple nodes per IP (as per CASSANDRA-7544). When {@code true}, a fresh
+     * {@link NodePerPortResolver} is always allocated for this server instance at {@link #build()}
+     * time, regardless of the order in which builder methods are called. This means it will
+     * override any prior {@link #withAddressResolver(AddressResolver)} call, and any subsequent
+     * {@link #withAddressResolver(AddressResolver)} call will be overridden by this setting.
      *
      * @param enabled Whether or not a node can be assigned to each port.
      * @return This builder.
      */
     public Builder withMultipleNodesPerIp(boolean enabled) {
       this.multipleNodesPerIp = enabled;
-      if (enabled) {
-        this.addressResolver = AddressResolver.nodePerPortResolver;
-      }
       return this;
     }
 
@@ -833,6 +832,10 @@ public final class Server implements AutoCloseable {
           eventLoopGroup = new NioEventLoopGroup(0, f);
           channelClass = NioServerSocketChannel.class;
         }
+      }
+      AddressResolver addressResolver = this.addressResolver;
+      if (multipleNodesPerIp) {
+        addressResolver = new NodePerPortResolver();
       }
       return new Server(
           addressResolver,
