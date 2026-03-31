@@ -101,7 +101,35 @@ public class AddressResolverIntegrationTest {
       List<SocketAddress> cluster1Addrs =
           boundCluster1.getNodes().stream().map(BoundNode::getAddress).collect(Collectors.toList());
 
-      assertThat(cluster1Addrs).hasSameElementsAs(cluster0Addrs);
+      assertThat(cluster1Addrs).isEqualTo(cluster0Addrs);
     }
+  }
+
+  @Test
+  public void testIndependentServersStartFromSamePort() throws Exception {
+    // Validates that each Server built with withMultipleNodesPerIp(true) gets its own fresh
+    // NodePerPortResolver starting from port 49152, proving there is no shared singleton state
+    // between server instances. Before the fix, both servers shared one AtomicReference ip counter
+    // so the second server would continue allocating from wherever the first left off.
+    List<SocketAddress> server1Addrs;
+    try (Server server1 = Server.builder().withMultipleNodesPerIp(true).build()) {
+      ClusterSpec cluster = ClusterSpec.builder().withNodes(3).build();
+      server1Addrs =
+          server1.register(cluster).getNodes().stream()
+              .map(BoundNode::getAddress)
+              .collect(Collectors.toList());
+    }
+
+    List<SocketAddress> server2Addrs;
+    try (Server server2 = Server.builder().withMultipleNodesPerIp(true).build()) {
+      ClusterSpec cluster = ClusterSpec.builder().withNodes(3).build();
+      server2Addrs =
+          server2.register(cluster).getNodes().stream()
+              .map(BoundNode::getAddress)
+              .collect(Collectors.toList());
+    }
+
+    // Both servers should have allocated the same addresses independently from port 49152.
+    assertThat(server2Addrs).isEqualTo(server1Addrs);
   }
 }
