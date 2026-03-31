@@ -20,7 +20,7 @@
 
   <groupId>com.scylladb.oss.simulacron</groupId>
   <artifactId>simulacron-parent</artifactId>
-  <version>0.13.0.1-SNAPSHOT</version>
+  <version>0.14.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>simulacron parent project</name>
