@@ -18,6 +18,11 @@ on:
         description: 'target-tag: tag or branch name to release. Use to re-release failed releases'
         default: master
 
+      release-version:
+        type: string
+        description: 'release-version: version to release (e.g. 0.14.0.0). Defaults to current SNAPSHOT version without the -SNAPSHOT suffix.'
+        default: ''
+
 jobs:
   release:
     name: Release
@@ -69,6 +74,8 @@ jobs:
       - name: Prepare release
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          SKIP_TESTS: ${{ inputs.skip-tests }}
+          RELEASE_VERSION: ${{ inputs.release-version }}
         run: |
           make release-prepare
 

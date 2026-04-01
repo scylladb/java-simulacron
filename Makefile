@@ -4,6 +4,8 @@ DRY_RUN ?= true
 SKIP_TESTS ?= false
 GITHUB_STEP_SUMMARY ?=
 
+RELEASE_VERSION ?=
+
 #ifeq ($(shell if [[ -n "$${GITHUB_STEP_SUMMARY}" ]]; then echo "running-in-workflow"; else echo "running-in-shell"; fi), running-in-workflow)
 #	DEBUG = true
 #endif
@@ -20,6 +22,11 @@ endif
 _RELEASE_SKIP_TESTS ?=
 ifneq (${SKIP_TESTS},false)
 	_RELEASE_SKIP_TESTS= -DskipTests=true -DskipITs=true
+endif
+
+_RELEASE_VERSION_FLAG ?=
+ifneq (${RELEASE_VERSION},)
+	_RELEASE_VERSION_FLAG= -DreleaseVersion=${RELEASE_VERSION}
 endif
 
 ifeq (${DEBUG},false)
@@ -47,7 +54,8 @@ ifeq ($(shell if [[ -n "$${GPG_PASSPHRASE}" ]]; then echo "present"; else echo "
 	@echo "environment variable GPG_PASSPHRASE has to be set"
 	@exit 1
 endif
-	MAVEN_OPTS="$${MAVEN_OPTS}$(_RELEASE_SKIP_TESTS)" $(MVNCMD) release:prepare -Drelease.push.changes=false -Dgpg.passphrase=$${GPG_PASSPHRASE}
+	MAVEN_OPTS="$${MAVEN_OPTS}$(_RELEASE_SKIP_TESTS)" $(MVNCMD) release:prepare -Drelease.push.changes=false \
+		-Dgpg.passphrase="$${GPG_PASSPHRASE}" $(_RELEASE_VERSION_FLAG)
 
 .release:
 ifeq ($(shell if [[ -n "$${GPG_PASSPHRASE}" ]]; then echo "present"; else echo "absent"; fi), absent)
