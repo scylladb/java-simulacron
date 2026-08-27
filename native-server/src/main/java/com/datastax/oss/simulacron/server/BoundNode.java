@@ -125,6 +125,8 @@ public class BoundNode extends AbstractNode<BoundCluster, BoundDataCenter>
 
   private final boolean activityLogging;
 
+  private final boolean addressFromResolver;
+
   private final Server server;
 
   private final BoundCluster cluster;
@@ -178,7 +180,12 @@ public class BoundNode extends AbstractNode<BoundCluster, BoundDataCenter>
     this.channel = new AtomicReference<>(channel);
     this.stubStore = new StubStore();
     this.activityLogging = activityLogging;
+    this.addressFromResolver = delegate.getAddress() == null;
     this.frameCodec = buildFrameCodec(delegate).orElse(parent.getFrameCodec());
+  }
+
+  boolean isAddressFromResolver() {
+    return addressFromResolver;
   }
 
   @Override
