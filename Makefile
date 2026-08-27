@@ -38,6 +38,9 @@ endif
 fmt:
 	$(MVNCMD) fmt:format
 
+fmt-check:
+	$(MVNCMD) fmt:check
+
 compile:
 	$(MVNCMD) compile test-compile -Dfmt.skip=true -Dclirr.skip=true -Danimal.sniffer.skip=true
 
@@ -47,7 +50,7 @@ verify:
 test-unit:
 	$(MVNCMD) test -Dfmt.skip=true -Dclirr.skip=true -Danimal.sniffer.skip=true
 
-test: fmt compile verify test-unit
+test: fmt-check compile verify test-unit
 
 release-prepare:
 ifeq ($(shell if [[ -n "$${MAVEN_GPG_PASSPHRASE}" ]]; then echo "present"; else echo "absent"; fi), absent)
@@ -77,5 +80,4 @@ release:
 
 release-dry-run:
 	$(MAKE) .release DRY_RUN=true
-
 

@@ -54,7 +54,9 @@ public class SimulacronDriverSupport {
     return defaultBuilder(node);
   }
 
-  /** @return A default cluster builder using {@link #nonQuietClusterCloseOptions}. */
+  /**
+   * @return A default cluster builder using {@link #nonQuietClusterCloseOptions}.
+   */
   public static Cluster.Builder defaultBuilder() {
     return Cluster.builder().withNettyOptions(nonQuietClusterCloseOptions);
   }

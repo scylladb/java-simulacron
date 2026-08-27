@@ -42,12 +42,16 @@ public class Message {
     return "Message{" + "message='" + message + '\'' + ", statusCode=" + statusCode + '}';
   }
 
-  /** @return The message associated with this message. */
+  /**
+   * @return The message associated with this message.
+   */
   public String getMessage() {
     return message;
   }
 
-  /** @return The HTTP status code associated with this message. */
+  /**
+   * @return The HTTP status code associated with this message.
+   */
   public int getStatusCode() {
     return statusCode;
   }

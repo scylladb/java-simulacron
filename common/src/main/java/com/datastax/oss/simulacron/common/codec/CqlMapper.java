@@ -254,7 +254,9 @@ public class CqlMapper {
       }
     }
 
-    /** @return The result of {@link Object#toString()}. */
+    /**
+     * @return The result of {@link Object#toString()}.
+     */
     @Override
     String toNativeTypeInternal(Object input) {
       return input.toString();

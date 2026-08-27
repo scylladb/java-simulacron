@@ -26,7 +26,9 @@ public abstract class AbstractIdentifiable implements Identifiable {
     this.id = id;
   }
 
-  /** @return A unique id for this. */
+  /**
+   * @return A unique id for this.
+   */
   public Long getId() {
     return id;
   }

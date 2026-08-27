@@ -51,7 +51,9 @@ public class ErrorMessage extends Message {
         + '}';
   }
 
-  /** @return The exception associated with this error (if provided). */
+  /**
+   * @return The exception associated with this error (if provided).
+   */
   public Throwable getException() {
     return exception;
   }

@@ -30,7 +30,9 @@ import java.util.stream.Collectors;
 public interface ClusterStructure<D extends DataCenterStructure<?, N>, N extends NodeStructure>
     extends Identifiable {
 
-  /** @return The {@link DataCenterStructure}s belonging to this cluster. */
+  /**
+   * @return The {@link DataCenterStructure}s belonging to this cluster.
+   */
   Collection<D> getDataCenters();
 
   /**

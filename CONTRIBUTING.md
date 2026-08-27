@@ -11,7 +11,7 @@ https://github.com/google/google-java-format for IDE plugins. The rules are not 
 The build will fail if the code is not formatted. To format all files from the command line, run:
 
 ```
-mvn fmt:format -Dformat.validateOnly=false
+mvn fmt:format
 ```
 
 Some aspects are not covered by the formatter:

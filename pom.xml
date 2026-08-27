@@ -43,6 +43,10 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <build.java.version>11</build.java.version>
+    <build.java.max.version>22</build.java.max.version>
+    <maven.min.version>3.6.3</maven.min.version>
+    <java.release.version>8</java.release.version>
     <assertj.version>3.19.0</assertj.version>
     <netty.version>4.1.12.Final</netty.version>
     <junit.version>4.13.1</junit.version>
@@ -54,7 +58,6 @@
     <java-driver.version>3.10.0</java-driver.version>
     <swagger-ui.version>3.42.0</swagger-ui.version>
     <jcommander.version>1.78</jcommander.version>
-    <format.validateOnly>true</format.validateOnly>
     <release.autopublish>false</release.autopublish>
     <release.push.changes>false</release.push.changes>
   </properties>
@@ -148,10 +151,35 @@
     </pluginManagement>
     <plugins>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.4.1</version>
+        <executions>
+          <execution>
+            <id>enforce-build-toolchain</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[${build.java.version},${build.java.max.version})</version>
+                  <message>JDK ${build.java.version} through 21 is required to build Simulacron. Produced artifacts still target Java ${java.release.version}.</message>
+                </requireJavaVersion>
+                <requireMavenVersion>
+                  <version>[${maven.min.version},)</version>
+                  <message>Maven ${maven.min.version} or newer is required to build Simulacron.</message>
+                </requireMavenVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.14.0</version>
         <configuration>
-          <release>8</release>
+          <release>${java.release.version}</release>
           <debug>true</debug>
           <optimize>true</optimize>
           <showDeprecation>true</showDeprecation>
@@ -162,7 +190,7 @@
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.3</version>
+        <version>0.8.15</version>
         <executions>
           <execution>
             <goals>
@@ -179,13 +207,17 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>com.coveo</groupId>
+        <groupId>com.spotify.fmt</groupId>
         <artifactId>fmt-maven-plugin</artifactId>
-        <version>2.13</version>
+        <version>2.22.1</version>
+        <configuration>
+          <forkMode>default</forkMode>
+        </configuration>
         <executions>
           <execution>
+            <phase>process-sources</phase>
             <goals>
-              <goal>format</goal>
+              <goal>check</goal>
             </goals>
           </execution>
         </executions>

@@ -62,7 +62,9 @@ public interface NodeProperties extends Identifiable {
             () -> getParent().map(p -> p.resolve(methodRef, defaultValue)).orElse(defaultValue));
   }
 
-  /** @return A human readable name for this. */
+  /**
+   * @return A human readable name for this.
+   */
   @JsonInclude(NON_NULL)
   String getName();
 
@@ -94,7 +96,9 @@ public interface NodeProperties extends Identifiable {
   @JsonInclude(NON_EMPTY)
   Map<String, Object> getPeerInfo();
 
-  /** @return The number of active connections on a node */
+  /**
+   * @return The number of active connections on a node
+   */
   Long getActiveConnections();
 
   /**
@@ -111,7 +115,9 @@ public interface NodeProperties extends Identifiable {
     return resolve(NodeProperties::getCassandraVersion, "3.0.12");
   }
 
-  /** @return the dse version for this, otherwise its parents. If it is not set, null is used. */
+  /**
+   * @return the dse version for this, otherwise its parents. If it is not set, null is used.
+   */
   default String resolveDSEVersion() {
     return resolve(NodeProperties::getDSEVersion, null);
   }

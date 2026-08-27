@@ -26,9 +26,10 @@ emphasis on testing with many simulated native protocol endpoints.
 
 ## Prerequisites
 
-0. Java 8+ - Simulacron is a Java-based application built on Java 8.
-1. [Apache Maven](https://maven.apache.org) 3.3+ - For building the project.
-2. **MacOS only**:  To be able to define more than a single node cluster, multiple loopback aliases should be added.
+0. Java 8+ - For running Simulacron. Published artifacts target Java 8.
+1. JDK 11 through 21 - For building the project from source.
+2. [Apache Maven](https://maven.apache.org) 3.6.3+ - For building the project.
+3. **MacOS only**:  To be able to define more than a single node cluster, multiple loopback aliases should be added.
 
    This is not required on Linux or Windows since these are implicitly defined.  The following script will add
    127.0.0.0-127.0.4.255:

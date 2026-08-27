@@ -55,7 +55,9 @@ public class AbstractNode<C extends AbstractCluster, D extends AbstractDataCente
     }
   }
 
-  /** @return The address and port that this node should listen on. */
+  /**
+   * @return The address and port that this node should listen on.
+   */
   public SocketAddress getAddress() {
     return address;
   }

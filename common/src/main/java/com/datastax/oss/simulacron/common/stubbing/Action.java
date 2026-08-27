@@ -20,6 +20,8 @@ package com.datastax.oss.simulacron.common.stubbing;
  * #delayInMs}).
  */
 public interface Action {
-  /** @return How far into the future to schedule this action. */
+  /**
+   * @return How far into the future to schedule this action.
+   */
   Long delayInMs();
 }

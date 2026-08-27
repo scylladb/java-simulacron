@@ -28,7 +28,9 @@ import java.util.Collection;
 public interface DataCenterStructure<C extends ClusterStructure, N extends NodeStructure>
     extends Identifiable {
 
-  /** @return the nodes belonging to this data center. */
+  /**
+   * @return the nodes belonging to this data center.
+   */
   Collection<N> getNodes();
 
   /**
@@ -41,7 +43,9 @@ public interface DataCenterStructure<C extends ClusterStructure, N extends NodeS
     return getNodes().stream().filter(n -> n.getId() == id).findAny().orElse(null);
   }
 
-  /** @return the cluster this data center belongs to. */
+  /**
+   * @return the cluster this data center belongs to.
+   */
   @JsonIgnore
   C getCluster();
 }
