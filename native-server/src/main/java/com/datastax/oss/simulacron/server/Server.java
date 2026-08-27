@@ -643,6 +643,19 @@ public final class Server implements AutoCloseable {
   public static class Builder {
     private AddressResolver addressResolver = AddressResolver.defaultResolver;
 
+    // The resolver most recently passed to withAddressResolver(...), or null if the caller has
+    // never called it. Tracked separately from the effective addressResolver above so that
+    // withMultipleNodesPerIp(boolean) can distinguish "the caller deliberately chose this
+    // resolver" from "this is just the default, or the NodePerPortResolver we auto-installed".
+    // That distinction is what lets an explicitly configured resolver win over the auto-installed
+    // NodePerPortResolver regardless of the order the two methods are called in, and it is what
+    // withMultipleNodesPerIp(false) restores (falling back to AddressResolver.defaultResolver when
+    // the caller never set one) rather than leaving a stale NodePerPortResolver behind.
+    //
+    // Invariant: addressResolver is always derived from these two fields, so every write to
+    // addressResolver must go through withAddressResolver(...) or withMultipleNodesPerIp(...).
+    private AddressResolver explicitAddressResolver = null;
+
     private static final long DEFAULT_BIND_TIMEOUT_IN_NANOS =
         TimeUnit.NANOSECONDS.convert(10, TimeUnit.SECONDS);
 
@@ -681,11 +694,19 @@ public final class Server implements AutoCloseable {
      * Sets the address resolver to use when assigning {@link SocketAddress} to {@link NodeSpec}'s
      * that don't have previously provided addresses.
      *
+     * <p>The most recent call to this method always wins: a resolver configured here takes
+     * precedence over the {@link NodePerPortResolver} that {@link #withMultipleNodesPerIp(boolean)}
+     * installs by default, regardless of the order in which the two methods are called, and it is
+     * also what {@code withMultipleNodesPerIp(false)} restores. Consequently, once this method has
+     * been called there is no way to get back to {@link AddressResolver#defaultResolver} or to an
+     * auto-installed {@link NodePerPortResolver} other than by passing one explicitly here.
+     *
      * @param addressResolver resolver to use.
      * @return This builder.
      */
     public Builder withAddressResolver(AddressResolver addressResolver) {
       this.addressResolver = addressResolver;
+      this.explicitAddressResolver = addressResolver;
       return this;
     }
 
@@ -744,17 +765,36 @@ public final class Server implements AutoCloseable {
     }
 
     /**
-     * Whether to support multiple nodes per IP (as per CASSANDRA-7544). When {@code true}, a fresh
-     * {@link NodePerPortResolver} is always allocated for this server instance at {@link #build()}
-     * time, regardless of the order in which builder methods are called. This means it will
-     * override any prior {@link #withAddressResolver(AddressResolver)} call, and any subsequent
-     * {@link #withAddressResolver(AddressResolver)} call will be overridden by this setting.
+     * Whether to support multiple nodes per IP (as per CASSANDRA-7544). Using this with {@code
+     * true} sets the address resolver to a fresh {@link NodePerPortResolver}, unless an {@link
+     * AddressResolver} has already been explicitly configured via {@link
+     * #withAddressResolver(AddressResolver)} (whether before or after this call), in which case
+     * that explicit resolver is left alone -- an explicitly configured resolver always wins over
+     * the auto-installed {@link NodePerPortResolver}, so the outcome no longer depends on the
+     * order in which {@code withMultipleNodesPerIp(true)} and {@link
+     * #withAddressResolver(AddressResolver)} are called.
+     *
+     * <p>Using this with {@code false} restores whichever resolver was most recently configured via
+     * {@link #withAddressResolver(AddressResolver)} (or {@link AddressResolver#defaultResolver} if
+     * none was ever explicitly set), so the {@link NodePerPortResolver} installed by a prior {@code
+     * withMultipleNodesPerIp(true)} call doesn't linger once multiple-nodes-per-IP support is
+     * turned back off.
      *
      * @param enabled Whether or not a node can be assigned to each port.
      * @return This builder.
      */
     public Builder withMultipleNodesPerIp(boolean enabled) {
       this.multipleNodesPerIp = enabled;
+      if (enabled) {
+        if (explicitAddressResolver == null) {
+          this.addressResolver = new NodePerPortResolver();
+        }
+      } else {
+        this.addressResolver =
+            explicitAddressResolver != null
+                ? explicitAddressResolver
+                : AddressResolver.defaultResolver;
+      }
       return this;
     }
 
@@ -834,9 +874,6 @@ public final class Server implements AutoCloseable {
         }
       }
       AddressResolver addressResolver = this.addressResolver;
-      if (multipleNodesPerIp) {
-        addressResolver = new NodePerPortResolver();
-      }
       return new Server(
           addressResolver,
           eventLoopGroup,

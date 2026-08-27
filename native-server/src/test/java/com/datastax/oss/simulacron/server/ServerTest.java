@@ -62,9 +62,11 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
+import java.lang.reflect.Field;
 import java.net.ConnectException;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
@@ -1183,6 +1185,180 @@ public class ServerTest {
         client.write(new Query(defaultQuery));
         Frame defaultMappingResponse = client.next();
         assertThat(defaultMappingResponse.message).isInstanceOf(Rows.class);
+      }
+    }
+  }
+
+  /**
+   * Reads back the resolver a {@link Server.Builder} would hand to the {@link Server} it builds.
+   *
+   * <p>Reflection is used deliberately for the cases below that involve {@link
+   * AddressResolver#defaultResolver} or {@link NodePerPortResolver}: both hand out real {@link
+   * java.net.InetSocketAddress}es, so asserting on them end-to-end would mean binding real sockets
+   * (and, for {@code defaultResolver}, provisioning extra loopback IPs), which is what {@code
+   * AddressResolverIntegrationTest} is for. Cases that can be driven with a {@link LocalAddress}
+   * resolver are asserted end-to-end instead.
+   */
+  private static AddressResolver configuredResolverOf(Server.Builder builder) throws Exception {
+    Field addressResolverField = Server.Builder.class.getDeclaredField("addressResolver");
+    addressResolverField.setAccessible(true);
+    return (AddressResolver) addressResolverField.get(builder);
+  }
+
+  @Test
+  public void testMultipleNodesPerIpInstallsNodePerPortResolverWhenNoneConfigured()
+      throws Exception {
+    // The core behavior of withMultipleNodesPerIp(true): with no resolver explicitly configured,
+    // it must install a NodePerPortResolver. This used to happen in build(); it now happens in the
+    // setter, and nothing that runs under `mvn test` pinned it down (the only coverage was
+    // AddressResolverIntegrationTest, which surefire excludes from the unit test run).
+    assertThat(configuredResolverOf(Server.builder())).isSameAs(AddressResolver.defaultResolver);
+
+    assertThat(configuredResolverOf(Server.builder().withMultipleNodesPerIp(true)))
+        .isInstanceOf(NodePerPortResolver.class);
+  }
+
+  @Test
+  public void testTogglingMultipleNodesPerIpOffAndOnReinstallsNodePerPortResolver()
+      throws Exception {
+    // Enabling, disabling and re-enabling must land back on a NodePerPortResolver rather than
+    // getting stuck on the default that the intervening withMultipleNodesPerIp(false) restored.
+    Server.Builder builder = Server.builder().withMultipleNodesPerIp(true);
+    AddressResolver firstResolver = configuredResolverOf(builder);
+    assertThat(firstResolver).isInstanceOf(NodePerPortResolver.class);
+
+    builder.withMultipleNodesPerIp(false);
+    assertThat(configuredResolverOf(builder)).isSameAs(AddressResolver.defaultResolver);
+
+    builder.withMultipleNodesPerIp(true);
+    AddressResolver secondResolver = configuredResolverOf(builder);
+    assertThat(secondResolver).isInstanceOf(NodePerPortResolver.class);
+    // A fresh instance, so the re-enabled server starts allocating from the beginning of the port
+    // range again rather than continuing from wherever the first resolver left off.
+    assertThat(secondResolver).isNotSameAs(firstResolver);
+  }
+
+  @Test
+  public void testMostRecentlyConfiguredAddressResolverAlwaysWins() throws Exception {
+    // Once withAddressResolver(...) has been called, the most recent one wins for the rest of the
+    // builder's life, no matter how withMultipleNodesPerIp is toggled around it.
+    AddressResolver first = () -> new LocalAddress("first");
+    AddressResolver second = () -> new LocalAddress("second");
+
+    Server.Builder builder =
+        Server.builder()
+            .withAddressResolver(first)
+            .withMultipleNodesPerIp(true)
+            .withAddressResolver(second);
+    assertThat(configuredResolverOf(builder)).isSameAs(second);
+
+    assertThat(configuredResolverOf(builder.withMultipleNodesPerIp(false))).isSameAs(second);
+    assertThat(configuredResolverOf(builder.withMultipleNodesPerIp(true))).isSameAs(second);
+
+    // Same story when the resolver is only configured after a full enable/disable cycle.
+    AddressResolver late = () -> new LocalAddress("late");
+    assertThat(
+            configuredResolverOf(
+                Server.builder()
+                    .withMultipleNodesPerIp(true)
+                    .withMultipleNodesPerIp(false)
+                    .withAddressResolver(late)
+                    .withMultipleNodesPerIp(true)))
+        .isSameAs(late);
+  }
+
+  @Test
+  public void testBothOrderingsOfMultipleNodesPerIpAndAddressResolverConverge() throws Exception {
+    // withMultipleNodesPerIp(true) and withAddressResolver(...) must converge on the same outcome
+    // whichever order they are called in: the explicitly configured resolver is used, and
+    // NodePerPortResolver never gets a chance to generate an address. Verified end-to-end via
+    // actual node registration, not just field inspection.
+    List<SocketAddress> addressesFromEnableThenResolver = new ArrayList<>();
+    AddressResolver resolverSetAfterEnabling =
+        () -> {
+          SocketAddress address =
+              new LocalAddress("after-enable-" + addressesFromEnableThenResolver.size());
+          addressesFromEnableThenResolver.add(address);
+          return address;
+        };
+
+    try (Server server =
+        Server.builder()
+            .withEventLoopGroup(eventLoop, LocalServerChannel.class)
+            .withMultipleNodesPerIp(true)
+            .withAddressResolver(resolverSetAfterEnabling)
+            .build()) {
+      try (BoundNode boundNode = server.register(NodeSpec.builder().build())) {
+        assertThat(addressesFromEnableThenResolver).hasSize(1);
+        assertThat(boundNode.getAddress()).isEqualTo(addressesFromEnableThenResolver.get(0));
+      }
+    }
+
+    List<SocketAddress> addressesFromResolverThenEnable = new ArrayList<>();
+    AddressResolver resolverSetBeforeEnabling =
+        () -> {
+          SocketAddress address =
+              new LocalAddress("before-enable-" + addressesFromResolverThenEnable.size());
+          addressesFromResolverThenEnable.add(address);
+          return address;
+        };
+
+    try (Server server =
+        Server.builder()
+            .withEventLoopGroup(eventLoop, LocalServerChannel.class)
+            .withAddressResolver(resolverSetBeforeEnabling)
+            .withMultipleNodesPerIp(true)
+            .build()) {
+      try (BoundNode boundNode = server.register(NodeSpec.builder().build())) {
+        assertThat(addressesFromResolverThenEnable).hasSize(1);
+        assertThat(boundNode.getAddress()).isEqualTo(addressesFromResolverThenEnable.get(0));
+      }
+    }
+  }
+
+  @Test
+  public void testDisablingMultipleNodesPerIpDoesNotLeaveStaleNodePerPortResolver()
+      throws Exception {
+    // withMultipleNodesPerIp(true).withMultipleNodesPerIp(false), with no resolver ever
+    // explicitly configured, should leave the builder back at the true default resolver instead
+    // of a stale NodePerPortResolver -- otherwise a server built this way would end up allocating
+    // multiple ports per IP (via the resolver) while its PeerMetadataHandler is constructed with
+    // multipleNodesPerIp=false, which is inconsistent.
+    Server.Builder builder =
+        Server.builder().withMultipleNodesPerIp(true).withMultipleNodesPerIp(false);
+
+    assertThat(configuredResolverOf(builder)).isSameAs(AddressResolver.defaultResolver);
+  }
+
+  @Test
+  public void testDisablingMultipleNodesPerIpRestoresPreviouslyConfiguredAddressResolver()
+      throws Exception {
+    // withAddressResolver(custom).withMultipleNodesPerIp(true).withMultipleNodesPerIp(false)
+    // should end up using the explicitly-configured resolver again, not the NodePerPortResolver
+    // installed by the withMultipleNodesPerIp(true) call in between.
+    List<SocketAddress> generatedAddresses = new ArrayList<>();
+    AddressResolver customResolver =
+        () -> {
+          SocketAddress address = new LocalAddress("custom-" + generatedAddresses.size());
+          generatedAddresses.add(address);
+          return address;
+        };
+
+    try (Server server =
+        Server.builder()
+            .withEventLoopGroup(eventLoop, LocalServerChannel.class)
+            .withAddressResolver(customResolver)
+            .withMultipleNodesPerIp(true)
+            .withMultipleNodesPerIp(false)
+            .build()) {
+
+      NodeSpec node = NodeSpec.builder().build();
+      try (BoundNode boundNode = server.register(node)) {
+        // The address should have been produced by the custom resolver, not by the
+        // NodePerPortResolver that was installed (and should have been discarded again) while
+        // withMultipleNodesPerIp(true) was in effect.
+        assertThat(generatedAddresses).hasSize(1);
+        assertThat(boundNode.getAddress()).isEqualTo(generatedAddresses.get(0));
       }
     }
   }
