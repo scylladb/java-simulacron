@@ -119,6 +119,20 @@ public class ServerTest {
   }
 
   @Test
+  public void testExplicitAddressIsNotReleasedToNodePerPortResolver() {
+    Server server =
+        Server.builder()
+            .withEventLoopGroup(eventLoop, LocalServerChannel.class)
+            .withMultipleNodesPerIp(true)
+            .build();
+    LocalAddress address = new LocalAddress("explicit-address");
+
+    server.register(NodeSpec.builder().withAddress(address).build());
+
+    server.close();
+  }
+
+  @Test
   public void testRegisterNodeBelongingToACluster() {
     // attempting to register a node on its own that belongs to a cluster should fail.
     ClusterSpec cluster = ClusterSpec.builder().build();

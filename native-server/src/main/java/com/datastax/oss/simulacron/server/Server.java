@@ -552,9 +552,12 @@ public final class Server implements AutoCloseable {
     return node.stopAsync()
         .thenApply(
             n -> {
-              logger.debug(
-                  "Releasing {} back to address resolver so it may be reused.", node.getAddress());
-              addressResolver.release(node.getAddress());
+              if (node.isAddressFromResolver()) {
+                logger.debug(
+                    "Releasing {} back to address resolver so it may be reused.",
+                    node.getAddress());
+                addressResolver.release(node.getAddress());
+              }
               return node;
             })
         .toCompletableFuture();
