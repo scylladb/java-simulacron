@@ -20,7 +20,9 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 public interface Identifiable extends Comparable<Identifiable> {
-  /** @return A unique id for this. */
+  /**
+   * @return A unique id for this.
+   */
   @JsonInclude(NON_NULL)
   Long getId();
 

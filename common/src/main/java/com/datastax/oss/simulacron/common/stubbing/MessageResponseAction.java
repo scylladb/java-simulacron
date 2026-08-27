@@ -43,7 +43,9 @@ public class MessageResponseAction implements Action {
     this.delayInMs = delayInMs;
   }
 
-  /** @return The message to send. */
+  /**
+   * @return The message to send.
+   */
   public Message getMessage() {
     return message;
   }

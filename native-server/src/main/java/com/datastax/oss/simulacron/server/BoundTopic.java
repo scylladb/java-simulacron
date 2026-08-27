@@ -122,7 +122,9 @@ public interface BoundTopic<C extends ConnectionReport, Q extends QueryLogReport
    */
   C resumeRead();
 
-  /** @return All nodes belonging to this topic. */
+  /**
+   * @return All nodes belonging to this topic.
+   */
   @JsonIgnore
   Collection<BoundNode> getNodes();
 
@@ -202,7 +204,9 @@ public interface BoundTopic<C extends ConnectionReport, Q extends QueryLogReport
     return acceptConnectionsAsync();
   }
 
-  /** @return recorded query logs for this. */
+  /**
+   * @return recorded query logs for this.
+   */
   @JsonIgnore
   Q getLogs();
 

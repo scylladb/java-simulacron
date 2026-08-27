@@ -77,7 +77,9 @@ public class NodeSpec extends AbstractNode<ClusterSpec, DataCenterSpec> {
       return this;
     }
 
-    /** @return Constructs a {@link NodeSpec} from this builder. Can be called multiple times. */
+    /**
+     * @return Constructs a {@link NodeSpec} from this builder. Can be called multiple times.
+     */
     public NodeSpec build() {
       return new NodeSpec(
           address, name, id, hostId, cassandraVersion, dseVersion, peerInfo, parent);

@@ -162,7 +162,9 @@ public final class Server implements AutoCloseable {
             .childHandler(new Initializer()));
   }
 
-  /** @return Whether or not this has been closed. */
+  /**
+   * @return Whether or not this has been closed.
+   */
   public boolean isClosed() {
     return closeFuture.get() != null;
   }
@@ -501,7 +503,9 @@ public final class Server implements AutoCloseable {
     return this.clusters.get(id);
   }
 
-  /** @return All clusters currently registered to this server. */
+  /**
+   * @return All clusters currently registered to this server.
+   */
   public Collection<BoundCluster> getClusters() {
     return this.clusters.values();
   }
@@ -577,7 +581,9 @@ public final class Server implements AutoCloseable {
     return io.netty.channel.epoll.EpollServerSocketChannel.class;
   }
 
-  /** @return a {@link Builder} for configuring and creating {@link Server} instances. */
+  /**
+   * @return a {@link Builder} for configuring and creating {@link Server} instances.
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -770,8 +776,8 @@ public final class Server implements AutoCloseable {
      * AddressResolver} has already been explicitly configured via {@link
      * #withAddressResolver(AddressResolver)} (whether before or after this call), in which case
      * that explicit resolver is left alone -- an explicitly configured resolver always wins over
-     * the auto-installed {@link NodePerPortResolver}, so the outcome no longer depends on the
-     * order in which {@code withMultipleNodesPerIp(true)} and {@link
+     * the auto-installed {@link NodePerPortResolver}, so the outcome no longer depends on the order
+     * in which {@code withMultipleNodesPerIp(true)} and {@link
      * #withAddressResolver(AddressResolver)} are called.
      *
      * <p>Using this with {@code false} restores whichever resolver was most recently configured via
@@ -808,7 +814,9 @@ public final class Server implements AutoCloseable {
       return this;
     }
 
-    /** @return a {@link Server} instance based on this builder's configuration. */
+    /**
+     * @return a {@link Server} instance based on this builder's configuration.
+     */
     public Server build() {
       if (stubStore == null) {
         stubStore = new StubStore();

@@ -166,17 +166,23 @@ public class QueryLog {
     return primed;
   }
 
-  /** @return The frame associated with this log if present. */
+  /**
+   * @return The frame associated with this log if present.
+   */
   public Frame getFrame() {
     return this.frame;
   }
 
-  /** @return List of decoded values if present and primed */
+  /**
+   * @return List of decoded values if present and primed
+   */
   public List<LinkedHashMap<String, Object>> getDecodedValues() {
     return this.decodedValues;
   }
 
-  /** @return Decoded value from query/execute message if present and primed */
+  /**
+   * @return Decoded value from query/execute message if present and primed
+   */
   public Object getDecodedValue(String name) {
     return this.decodedValues.stream().findFirst().orElse(new LinkedHashMap<>()).get(name);
   }

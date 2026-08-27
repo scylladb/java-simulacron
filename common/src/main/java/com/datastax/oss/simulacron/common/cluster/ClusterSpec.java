@@ -43,7 +43,9 @@ public class ClusterSpec extends AbstractCluster<DataCenterSpec, NodeSpec> {
     this.numberOfTokens = numberOfTokens;
   }
 
-  /** @return the number of tokens to be assigned to each node */
+  /**
+   * @return the number of tokens to be assigned to each node
+   */
   public int getNumberOfTokens() {
     return this.numberOfTokens;
   }
@@ -58,7 +60,9 @@ public class ClusterSpec extends AbstractCluster<DataCenterSpec, NodeSpec> {
     return new DataCenterSpec.Builder(this, dcCounter.getAndIncrement());
   }
 
-  /** @return A builder for making a ClusterSpec. */
+  /**
+   * @return A builder for making a ClusterSpec.
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -98,7 +102,9 @@ public class ClusterSpec extends AbstractCluster<DataCenterSpec, NodeSpec> {
       return this;
     }
 
-    /** @return Constructs a {@link ClusterSpec} from this builder. Can be called multiple times. */
+    /**
+     * @return Constructs a {@link ClusterSpec} from this builder. Can be called multiple times.
+     */
     public ClusterSpec build() {
       ClusterSpec cluster =
           new ClusterSpec(name, id, cassandraVersion, dseVersion, peerInfo, numberOfTokens);

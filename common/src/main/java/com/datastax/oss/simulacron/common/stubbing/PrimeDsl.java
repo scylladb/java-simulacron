@@ -509,7 +509,9 @@ public class PrimeDsl {
       return this;
     }
 
-    /** @return a {@link Prime} from this configuration. */
+    /**
+     * @return a {@link Prime} from this configuration.
+     */
     public Prime build() {
       return new Prime(new RequestPrime(when, then));
     }

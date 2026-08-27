@@ -27,11 +27,15 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 public interface NodeStructure<C extends ClusterStructure, D extends DataCenterStructure<C, ?>>
     extends Identifiable {
 
-  /** @return the data center this node belongs to. */
+  /**
+   * @return the data center this node belongs to.
+   */
   @JsonIgnore
   D getDataCenter();
 
-  /** @return the cluster this node belongs to. */
+  /**
+   * @return the cluster this node belongs to.
+   */
   @JsonIgnore
   default C getCluster() {
     if (getDataCenter() != null) {
