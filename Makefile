@@ -32,7 +32,7 @@ endif
 ifeq (${DEBUG},false)
 	MVNCMD ?= mvn
 else
-	MVNCMD ?= mvn -B -X -ntp
+	MVNCMD ?= mvn -B -ntp
 endif
 
 fmt:
