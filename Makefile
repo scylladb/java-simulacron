@@ -1,3 +1,4 @@
+RELEASE_GUARD ?= scripts/release/guard.py
 SHELL := bash
 DEBUG ?= false
 DRY_RUN ?= true
@@ -57,7 +58,7 @@ ifeq ($(shell if [[ -n "$${MAVEN_GPG_PASSPHRASE}" ]]; then echo "present"; else 
 	@echo "environment variable MAVEN_GPG_PASSPHRASE has to be set"
 	@exit 1
 endif
-	MAVEN_OPTS="$${MAVEN_OPTS}$(_RELEASE_SKIP_TESTS)" $(MVNCMD) release:prepare -Drelease.push.changes=false \
+	@MAVEN_OPTS="$${MAVEN_OPTS}$(_RELEASE_SKIP_TESTS)" python3 "$(RELEASE_GUARD)" run $(MVNCMD) -B release:prepare -Drelease.push.changes=false \
 		$(_RELEASE_VERSION_FLAG)
 
 .release:
@@ -73,7 +74,7 @@ ifeq ($(shell if [[ -n "$${SONATYPE_TOKEN_PASSWORD}" ]]; then echo "present"; el
 	@echo "environment variable SONATYPE_TOKEN_PASSWORD has to be set"
 	@exit 1
 endif
-	MAVEN_OPTS="$${MAVEN_OPTS}$(_RELEASE_SKIP_TESTS)" $(MVNCMD) release:perform $(_RELEASE_PUBLISH)
+	@MAVEN_OPTS="$${MAVEN_OPTS}$(_RELEASE_SKIP_TESTS)" python3 "$(RELEASE_GUARD)" run $(MVNCMD) -B release:perform $(_RELEASE_PUBLISH)
 
 release:
 	$(MAKE) .release DRY_RUN=false
