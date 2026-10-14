@@ -42,6 +42,7 @@
   </modules>
 
   <properties>
+    <gpg.bestPractices>true</gpg.bestPractices>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <build.java.version>11</build.java.version>
     <build.java.max.version>22</build.java.max.version>
@@ -312,7 +313,7 @@ limitations under the License.]]>
       <plugin>
         <groupId>org.sonatype.central</groupId>
         <artifactId>central-publishing-maven-plugin</artifactId>
-        <version>0.8.0</version>
+        <version>0.11.0</version>
         <extensions>true</extensions>
         <configuration>
           <publishingServerId>central</publishingServerId>
