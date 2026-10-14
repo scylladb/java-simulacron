@@ -235,6 +235,7 @@ def capture(command, env, forms, logs):
     buffers = [bytearray(), bytearray()]
     complete = [False, False]
     overflow = False
+    logs_started = False
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ, 0)
@@ -263,6 +264,7 @@ def capture(command, env, forms, logs):
             redact(bytes(buffer), forms) if ended else INCOMPLETE_LOG
             for buffer, ended in zip(buffers, complete)
         ]
+        logs_started = True
         write_logs(clean, logs)
         return status if status >= 0 else 128 - status
     except BaseException as error:
@@ -294,7 +296,8 @@ def capture(command, env, forms, logs):
                 ]
             except Exception:
                 pass
-        write_logs(clean, logs)
+        if not logs_started:
+            write_logs(clean, logs)
         raise
     finally:
         process.stdout.close()

@@ -465,6 +465,38 @@ class ReleaseTests(unittest.TestCase):
                     self.assertEqual(console, guard.OVERFLOW_LOG)
                     self.assertEqual((Path(directory) / (name + ".log")).read_bytes(), console)
 
+    def test_interruption_during_log_writes_does_not_replay_output(self):
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            for partial in (False, True):
+                with self.subTest(signum=signum, partial=partial), tempfile.TemporaryDirectory() as directory:
+                    logs = Path(directory) / "logs"
+                    calls = Path(directory) / "writes"
+                    command = [sys.executable, "-c",
+                               "import os; os.write(1, b'out\\n'); os.write(2, b'err\\n')"]
+                    script = (
+                        "import guard, os\nfrom pathlib import Path\n"
+                        "original = guard.write_logs\n"
+                        "def interrupted_write(clean, logs):\n"
+                        f" with Path({str(calls)!r}).open('a') as out: out.write('called\\n')\n"
+                        + (" logs.mkdir(parents=True, exist_ok=True)\n"
+                           " with (logs / 'stdout.log').open('ab') as out: out.write(clean[0])\n"
+                           if partial else " original(clean, logs)\n")
+                        + f" guard.interrupted({int(signum)}, None)\n"
+                        "guard.write_logs = interrupted_write\n"
+                        f"raise SystemExit(guard.capture({command!r}, os.environ, [], Path({str(logs)!r})))"
+                    )
+                    result = subprocess.run([sys.executable, "-c", script], capture_output=True,
+                                            cwd=ROOT / "scripts/release", timeout=5)
+                    self.assertEqual(result.returncode, 128 + signum)
+                    self.assertEqual(calls.read_text(), "called\n")
+                    self.assertEqual((logs / "stdout.log").read_bytes(), b"out\n")
+                    if partial:
+                        self.assertFalse((logs / "stderr.log").exists())
+                    else:
+                        self.assertEqual(result.stdout, b"out\n")
+                        self.assertEqual(result.stderr, b"err\n")
+                        self.assertEqual((logs / "stderr.log").read_bytes(), b"err\n")
+
     def test_inherited_pipes_have_bounded_safe_capture(self):
         for complete_stderr in (False, True):
             with self.subTest(complete_stderr=complete_stderr), tempfile.TemporaryDirectory() as directory:
