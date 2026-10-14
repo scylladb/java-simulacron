@@ -263,13 +263,15 @@ class ReleaseTests(unittest.TestCase):
                 ready = root / "ready"
                 mvn = root / "mvn"
                 mvn.write_text(f"#!{sys.executable}\nimport os, time\n"
+                               "os.write(1, b'-Dpassword=\"first\\nsecret tail')\n"
                                f"open({str(ready) + '.tmp'!r}, 'w').write(str(os.getpid()))\n"
                                f"os.rename({str(ready) + '.tmp'!r}, {str(ready)!r})\n"
                                "time.sleep(30)\n")
                 mvn.chmod(0o755)
                 process = subprocess.Popen(
                     [sys.executable, str(ROOT / "scripts/release/guard.py"), "run", "mvn"],
-                    env=dict(os.environ, PATH=directory + os.pathsep + os.environ["PATH"]),
+                    env=dict(os.environ, PATH=directory + os.pathsep + os.environ["PATH"],
+                             RELEASE_LOG_DIR=str(root / "logs")),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 )
                 try:
@@ -279,8 +281,11 @@ class ReleaseTests(unittest.TestCase):
                     self.assertTrue(ready.exists())
                     child = int(ready.read_text())
                     process.send_signal(signum)
-                    process.communicate(timeout=5)
+                    stdout, stderr = process.communicate(timeout=5)
                     self.assertEqual(process.returncode, 128 + signum)
+                    for name, console in (("stdout", stdout), ("stderr", stderr)):
+                        self.assertEqual(console, guard.CANCELLED_LOG)
+                        self.assertEqual((root / "logs" / (name + ".log")).read_bytes(), console)
                     with self.assertRaises(ProcessLookupError):
                         os.kill(child, 0)
                 finally:
@@ -423,16 +428,79 @@ class ReleaseTests(unittest.TestCase):
                     if failure != "directory":
                         self.assertEqual((logs / "stderr.log").read_bytes(), b"err\n")
 
-    def test_sanitization_and_memory_failures_write_no_logs(self):
-        for failure in (
-            patch.object(guard, "redact", side_effect=ValueError("secret")),
-            patch.object(guard, "LIMIT", 1),
-        ):
-            with tempfile.TemporaryDirectory() as directory, failure:
-                logs = Path(directory) / "logs"
-                with self.assertRaises((ValueError, guard.Unsafe)):
-                    guard.capture([sys.executable, "-c", 'print("secret")'], os.environ, [], logs)
-                self.assertFalse(logs.exists())
+    def test_sanitization_failure_writes_fixed_logs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = (
+                "import guard, os\nfrom pathlib import Path\n"
+                "guard.redact = lambda *_: (_ for _ in ()).throw(ValueError('secret'))\n"
+                "try:\n"
+                f" guard.capture([{sys.executable!r}, '-c', 'print(\"secret\")'], os.environ, [], Path({directory!r}))\n"
+                "except ValueError:\n raise SystemExit(2)"
+            )
+            result = subprocess.run([sys.executable, "-c", script], capture_output=True,
+                                    cwd=ROOT / "scripts/release")
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stdout, guard.FAILED_LOG)
+            self.assertEqual(result.stderr, guard.FAILED_LOG)
+            self.assertEqual((Path(directory) / "stdout.log").read_bytes(), guard.FAILED_LOG)
+            self.assertEqual((Path(directory) / "stderr.log").read_bytes(), guard.FAILED_LOG)
+
+    def test_overflow_drains_without_interrupting_maven(self):
+        for status in (0, 17):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                marker = Path(directory) / "completed"
+                command = [sys.executable, "-c",
+                           "import os\nfor fd in (1, 2):\n"
+                           " os.write(fd, b'-Dpassword=\"first\\nsecret tail' * 100)\n"
+                           f"open({str(marker)!r}, 'w').write('done')\nraise SystemExit({status})"]
+                script = (
+                    "import guard, os\nfrom pathlib import Path\nguard.LIMIT = 64\n"
+                    f"raise SystemExit(guard.capture({command!r}, os.environ, [], Path({directory!r})))"
+                )
+                result = subprocess.run([sys.executable, "-c", script], capture_output=True,
+                                        cwd=ROOT / "scripts/release", timeout=5)
+                self.assertEqual(result.returncode, status)
+                self.assertEqual(marker.read_text(), "done")
+                for name, console in (("stdout", result.stdout), ("stderr", result.stderr)):
+                    self.assertEqual(console, guard.OVERFLOW_LOG)
+                    self.assertEqual((Path(directory) / (name + ".log")).read_bytes(), console)
+
+    def test_inherited_pipes_have_bounded_safe_capture(self):
+        for complete_stderr in (False, True):
+            with self.subTest(complete_stderr=complete_stderr), tempfile.TemporaryDirectory() as directory:
+                pid_file = Path(directory) / "child"
+                command = [sys.executable, "-c",
+                           "import os, time\nchild = os.fork()\nif child == 0:\n"
+                           + (" os.close(2)\n" if complete_stderr else "")
+                           + " os.write(1, b'known-secret-prefix')\n"
+                           " time.sleep(30)\n os._exit(0)\n"
+                           f"open({str(pid_file)!r}, 'w').write(str(child))\n"
+                           + ("os.write(2, b'-Dpassword=\"first\\nunknown secret tail\"')\n"
+                              if complete_stderr else "os.write(2, b'-Dpassword=\"first\\nunknown secret tail')\n")
+                           + "raise SystemExit(17)"]
+                script = (
+                    "import guard, os\nfrom pathlib import Path\n"
+                    f"raise SystemExit(guard.capture({command!r}, os.environ, [b'known-secret-prefix-tail'], Path({directory!r})))"
+                )
+                started = time.monotonic()
+                try:
+                    result = subprocess.run([sys.executable, "-c", script], capture_output=True,
+                                            cwd=ROOT / "scripts/release", timeout=5)
+                    self.assertLess(time.monotonic() - started, 4)
+                    self.assertEqual(result.returncode, 17)
+                    self.assertEqual(result.stdout, guard.INCOMPLETE_LOG)
+                    self.assertEqual((Path(directory) / "stdout.log").read_bytes(), result.stdout)
+                    if complete_stderr:
+                        self.assertEqual(result.stderr, b'-Dpassword=[REDACTED]')
+                    else:
+                        self.assertEqual(result.stderr, guard.INCOMPLETE_LOG)
+                    self.assertEqual((Path(directory) / "stderr.log").read_bytes(), result.stderr)
+                finally:
+                    if pid_file.exists():
+                        try:
+                            os.kill(int(pid_file.read_text()), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
 
 
 if __name__ == "__main__":

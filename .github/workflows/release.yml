@@ -15,7 +15,7 @@ on:
 
       target-tag:
         type: string
-        description: 'target-tag: tag or branch name to release. Use to re-release failed releases'
+        description: 'target-tag: master, or a tag whose preceding commit passes release credential safety checks. Other branches and unsafe historical targets are unsupported.'
         default: master
 
       release-version:

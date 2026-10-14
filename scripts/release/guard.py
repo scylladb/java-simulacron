@@ -2,7 +2,8 @@
 """Check release defaults and capture Maven output without writing raw credentials.
 
 Output is buffered until Maven exits (64 MiB maximum), then sanitized for both the
-console and log artifacts. Child Maven processes run normally; they are not intercepted.
+console and log artifacts. Overflow and incomplete streams produce fixed diagnostics.
+Child Maven processes run normally; they are not intercepted.
 """
 
 import base64
@@ -14,10 +15,16 @@ import selectors
 import signal
 import subprocess
 import sys
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 
 LIMIT = 64 * 1024 * 1024
+DRAIN_GRACE = 1
+OVERFLOW_LOG = b"Maven output exceeded the capture limit; invocation output withheld.\n"
+INCOMPLETE_LOG = b"Maven output stream did not close; incomplete output withheld.\n"
+CANCELLED_LOG = b"Maven was interrupted; incomplete output withheld.\n"
+FAILED_LOG = b"Sanitized Maven output capture failed; invocation output withheld.\n"
 ENV_OPTIONS = (
     "MAVEN_ARGS",
     "MAVEN_OPTS",
@@ -192,59 +199,102 @@ def redact(data, forms):
     return bytes(output)
 
 
+def write_logs(clean, logs):
+    """Write only sanitized content or fixed diagnostics, tolerating broken outputs."""
+    output_failed = False
+    for name, data, stream in zip(("stdout", "stderr"), clean, (sys.stdout, sys.stderr)):
+        try:
+            logs.mkdir(parents=True, exist_ok=True)
+            with (logs / (name + ".log")).open("ab") as output:
+                output.write(data)
+        except OSError:
+            output_failed = True
+        try:
+            stream.buffer.write(data)
+            stream.flush()
+        except OSError:
+            output_failed = True
+            # Prevent a failed shutdown flush from replacing Maven's exit status.
+            try:
+                with open(os.devnull, "wb") as sink:
+                    os.dup2(sink.fileno(), stream.fileno())
+            except OSError:
+                pass
+    if output_failed:
+        try:
+            os.write(2, b"Sanitized release output could not be fully written; values withheld.\n")
+        except OSError:
+            pass
+
+
 def capture(command, env, forms, logs):
-    """Never spool raw output. Limit memory and terminate the process group on failure."""
+    """Never spool raw output or sanitize a stream cut off before EOF."""
     process = subprocess.Popen(
         command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
     )
     buffers = [bytearray(), bytearray()]
+    complete = [False, False]
+    overflow = False
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ, 0)
             selector.register(process.stderr, selectors.EVENT_READ, 1)
+            exited_at = None
             while selector.get_map():
-                for key, _ in selector.select():
+                if process.poll() is not None:
+                    if exited_at is None:
+                        exited_at = time.monotonic()
+                    elif time.monotonic() - exited_at >= DRAIN_GRACE:
+                        break
+                for key, _ in selector.select(timeout=0.1):
                     chunk = os.read(key.fileobj.fileno(), 65536)
                     if not chunk:
+                        complete[key.data] = True
                         selector.unregister(key.fileobj)
-                    else:
+                    elif not overflow:
+                        if sum(map(len, buffers)) + len(chunk) > LIMIT:
+                            overflow = True
+                            buffers = [bytearray(), bytearray()]
+                            continue
                         buffers[key.data].extend(chunk)
-                        if sum(map(len, buffers)) > LIMIT:
-                            raise Unsafe("release output exceeds memory limit")
         status = process.wait()
         # Sanitize both streams completely before opening artifacts or emitting output.
-        clean = [redact(bytes(buffer), forms) for buffer in buffers]
-        output_failed = False
-        for name, data, stream in zip(("stdout", "stderr"), clean, (sys.stdout, sys.stderr)):
-            try:
-                logs.mkdir(parents=True, exist_ok=True)
-                with (logs / (name + ".log")).open("ab") as output:
-                    output.write(data)
-            except OSError:
-                output_failed = True
-            try:
-                stream.buffer.write(data)
-                stream.flush()
-            except OSError:
-                output_failed = True
-                # Prevent a failed shutdown flush from replacing Maven's exit status.
-                try:
-                    with open(os.devnull, "wb") as sink:
-                        os.dup2(sink.fileno(), stream.fileno())
-                except OSError:
-                    pass
-        if output_failed:
-            try:
-                os.write(2, b"Sanitized release output could not be fully written; values withheld.\n")
-            except OSError:
-                pass
+        clean = [OVERFLOW_LOG, OVERFLOW_LOG] if overflow else [
+            redact(bytes(buffer), forms) if ended else INCOMPLETE_LOG
+            for buffer, ended in zip(buffers, complete)
+        ]
+        write_logs(clean, logs)
         return status if status >= 0 else 128 - status
-    except BaseException:
+    except BaseException as error:
+        signum = signal.SIGTERM
+        if isinstance(error, SystemExit) and isinstance(error.code, int):
+            signum = error.code - 128
+        if signum not in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+            signum = signal.SIGTERM
+        try:
+            os.killpg(process.pid, signum)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=DRAIN_GRACE)
+        except subprocess.TimeoutExpired:
+            pass
+        # The Maven parent may exit before a descendant responds to cancellation.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
         process.wait()
+        clean = [FAILED_LOG, FAILED_LOG]
+        if isinstance(error, (SystemExit, KeyboardInterrupt)):
+            try:
+                clean = [OVERFLOW_LOG, OVERFLOW_LOG] if overflow else [
+                    redact(bytes(buffer), forms) if ended else CANCELLED_LOG
+                    for buffer, ended in zip(buffers, complete)
+                ]
+            except Exception:
+                pass
+        write_logs(clean, logs)
         raise
     finally:
         process.stdout.close()
