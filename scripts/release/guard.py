@@ -112,9 +112,14 @@ def check_policy(root):
                 maven_arguments=path.read_text().splitlines() if path.name == "maven.config" else (),
                 jvm_options=path.name == "jvm.config",
             )
-    workflow = (root / ".github/workflows/release.yml").read_text()
-    if "RELEASE_GUARD" not in workflow or "if: always()" not in workflow:
-        raise Unsafe("release workflow sanity check requires RELEASE_GUARD and if: always() markers")
+    workflow_path = root / ".github/workflows/release.yml"
+    if not workflow_path.exists():
+        raise Unsafe("release workflow .github/workflows/release.yml is missing")
+    workflow = workflow_path.read_text()
+    if "RELEASE_GUARD" not in workflow:
+        raise Unsafe("release workflow requires the RELEASE_GUARD marker")
+    if not re.search(r"if:\s*(?:always\(\)|\$\{\{\s*always\(\)\s*\}\})", workflow):
+        raise Unsafe("release workflow requires an always() artifact upload condition")
     makefile = root / "Makefile"
     if makefile.exists():
         for line in makefile.read_text().splitlines():
@@ -283,6 +288,10 @@ def main():
             secret_forms(os.environ),
             Path(os.environ.get("RELEASE_LOG_DIR", "/tmp/release-logs")),
         )
+    except Unsafe as error:
+        # Unsafe messages name only fixed policy checks, never their input values.
+        print(f"Release safety check failed: {error}; values withheld.", file=sys.stderr)
+        return 2
     except Exception:
         # Exception values can contain credentials. Do not echo them.
         print(

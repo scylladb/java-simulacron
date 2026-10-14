@@ -4,6 +4,7 @@ import base64
 import io
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -221,6 +222,29 @@ class ReleaseTests(unittest.TestCase):
                                                         f"<version>{version}</version>"))
                 with self.subTest(version=version):
                     guard.check_policy(root)
+
+    def test_workflow_policy_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(ROOT / ".github", root / ".github")
+            shutil.copy(ROOT / "pom.xml", root / "pom.xml")
+            workflow = root / ".github/workflows/release.yml"
+            original = workflow.read_text()
+            workflow.write_text(original.replace("if: always()", "if: ${{ always() }}"))
+            guard.check_policy(root)
+            for text, message in ((original.replace("RELEASE_GUARD", "GUARD"), "RELEASE_GUARD"),
+                                  (original.replace("if: always()", "if: success()"), "always()")):
+                workflow.write_text(text)
+                with self.assertRaisesRegex(guard.Unsafe, re.escape(message)):
+                    guard.check_policy(root)
+            workflow.unlink()
+            with self.assertRaisesRegex(guard.Unsafe, "workflow.*missing"):
+                guard.check_policy(root)
+            with patch.object(sys, "argv", ["guard.py", "check"]), patch.object(
+                guard, "check_policy", side_effect=guard.Unsafe("release workflow requires RELEASE_GUARD")
+            ), patch("sys.stderr", io.StringIO()) as output:
+                self.assertEqual(guard.main(), 2)
+                self.assertIn("RELEASE_GUARD", output.getvalue())
 
     def test_option_locations_hide_values(self):
         for text in ("safe\ncurl -X POST secret", "safe\n-X", "safe\n--define\npassword=secret"):
